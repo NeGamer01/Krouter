@@ -172,20 +172,38 @@ function cmdStart(flags) {
     env: { ...process.env, KROUTER_PORT: port },
   });
   if (detached) child.unref();
-  saveCliConfig({ ...loadCliConfig(), url: 'http://127.0.0.1:' + port });
+  const base = 'http://127.0.0.1:' + port;
+  saveCliConfig({ ...loadCliConfig(), url: base });
   out('starting krouter on port ' + port + ' (pid ' + child.pid + ')…');
   if (detached) {
-    // wait up to 8s for health
-    const target = { url: 'http://127.0.0.1:' + port, key: loadCliConfig().key };
+    // wait up to 10s for health, then grab the router api key so the
+    // dashboard/cli is usable immediately (krouter generates one on first run)
+    const target = { url: base, key: loadCliConfig().key };
     (async () => {
-      for (let i = 0; i < 16; i++) {
+      let healthy = false;
+      for (let i = 0; i < 20; i++) {
         await new Promise((r) => setTimeout(r, 500));
         try {
           const r = await apiCall(target.url, target.key, 'GET', '/health');
-          if (r.status === 200) { ok('krouter up at ' + target.url); return; }
+          if (r.status === 200) { healthy = true; break; }
         } catch { /* retry */ }
       }
-      warn('server still starting — check ' + logFile);
+      if (!healthy) { warn('server still starting — check ' + logFile); return; }
+      ok('krouter up at ' + base);
+      const cfg = loadCliConfig();
+      if (cfg.key) { ok('router key: ' + cfg.key); return; }
+      // no key saved yet — pull it from the local server state (localhost is trusted)
+      try {
+        const r = await apiCall(base, '', 'GET', '/api/state');
+        const st = r.json;
+        if (r.status === 200 && st && st.apiKey) {
+          cfg.key = st.apiKey;
+          saveCliConfig(cfg);
+          ok('router key (saved for dashboard/cli): ' + st.apiKey);
+        } else if (r.status === 401) {
+          warn('router needs an api key — open ' + base + '/dashboard to see it, then: krouter config set --key <key>');
+        }
+      } catch (e) { /* state endpoint blocked — fine */ }
     })();
   }
 }
@@ -479,9 +497,23 @@ async function cmdTunnelStart(flags) {
   try { port = new URL(tcfg.url).port || '20128'; } catch { port = '20128'; }
   const bin = await ensureCloudflared();
   const domain = flags.domain || null;
-  const tunnels = loadTunnels();
-  const running = tunnels.tunnels.find((x) => x.pid && !x.exited);
-  if (running) { warn('tunnel already running (pid ' + running.pid + ')'); return; }
+  let tunnels = loadTunnels();
+
+  // clean stale records: kill anything still alive, drop exited ones
+  const survivors = [];
+  for (const t of tunnels.tunnels || []) {
+    let alive = false;
+    if (t.pid && !t.exited) {
+      try { process.kill(t.pid, 0); alive = true; } catch { alive = false; }
+    }
+    if (alive) {
+      try { process.kill(t.pid, 'SIGTERM'); } catch { /* gone */ }
+      warn('stopped leftover tunnel pid ' + t.pid);
+    }
+  }
+  tunnels = { tunnels: [] }; // fresh record book
+  saveTunnels(tunnels);
+
   const { pid, logFile } = spawnTunnel(bin, port, domain);
   ok('tunnel started (pid ' + pid + (domain ? ' domain ' + domain : ' quick') + ')  log: ' + logFile);
   tunnels.tunnels.push({ pid, domain: domain || null, startedAt: Date.now(), exited: false });
@@ -510,15 +542,26 @@ async function cmdTunnelStart(flags) {
 function cmdTunnelStop(flags) {
   const tunnels = loadTunnels();
   let stopped = 0;
-  for (const t of tunnels.tunnels) {
+  const remaining = [];
+  for (const t of tunnels.tunnels || []) {
     if (t.pid && !t.exited) {
-      try { process.kill(t.pid, 'SIGTERM'); stopped++; } catch { t.exited = true; }
-      t.exited = true;
+      try { process.kill(t.pid, 'SIGTERM'); stopped++; } catch { /* already gone */ }
     }
   }
-  saveTunnels(tunnels);
+  // wait up to 5s for processes to die, then drop all records
+  if (stopped) {
+    for (let i = 0; i < 20; i++) {
+      const still = (tunnels.tunnels || []).some((t) => {
+        if (!t.pid || t.exited) return false;
+        try { process.kill(t.pid, 0); return true; } catch { return false; }
+      });
+      if (!still) break;
+      setTimeout(0, 250);
+    }
+  }
+  saveTunnels({ tunnels: [] }); // clear the record book
   if (stopped) ok(stopped + ' tunnel(s) stopped');
-  else warn('no running tunnel found');
+  else ok('no running tunnel found');
 }
 
 function cmdTunnelStatus(flags) {
