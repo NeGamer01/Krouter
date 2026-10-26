@@ -1,0 +1,1281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>krouter — dashboard</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --bg2: #141414;
+    --bg3: #1c1c1c;
+    --bg4: #262626;
+    --line: #2a2a2a;
+    --line2: #383838;
+    --txt: #f5f5f5;
+    --txt2: #d4d4d4;
+    --dim: #8f8f8f;
+    --acc: #3b82f6;
+    --acc2: #22c55e;
+    --warn: #f59e0b;
+    --err: #ef4444;
+    --violet: #8b5cf6;
+    --tier-sub: #8b5cf6;
+    --tier-cheap: #22c55e;
+    --tier-free: #3b82f6;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,.4), 0 4px 12px rgba(0,0,0,.15);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--txt);
+    font: 14px/1.55 "Inter", -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased; }
+  ::selection { background: rgba(59,130,246,.35); }
+  code, kbd, pre { font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; }
+  a { color: var(--acc); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  header.top {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 12px 22px; border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #161616, var(--bg));
+    position: sticky; top: 0; z-index: 20; backdrop-filter: blur(8px);
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; letter-spacing: -.2px; }
+  .logo .dot { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff; font-size: 14px;
+    box-shadow: 0 2px 8px rgba(59,130,246,.4); }
+  .tabs { display: flex; gap: 2px; flex-wrap: wrap; margin-left: 8px; }
+  .tab { padding: 6px 14px; border-radius: 999px; cursor: pointer; color: var(--dim);
+    border: 1px solid transparent; user-select: none; font-size: 13px; transition: all .15s; }
+  .tab:hover { color: var(--txt2); background: var(--bg2); }
+  .tab.active { color: var(--txt); background: var(--bg3); border-color: var(--line); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px;
+    background: var(--bg3); border: 1px solid var(--line); color: var(--dim); font-weight: 500; }
+  .spacer { flex: 1; }
+  main { max-width: 1280px; margin: 0 auto; padding: 22px 22px 80px; }
+  .card { background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
+  .card h3 { margin: 0 0 12px; font-size: 14px; font-weight: 600; letter-spacing: -.1px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .stat { background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+  .stat .k { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; font-weight: 600; }
+  .stat .v { font-size: 24px; font-weight: 700; margin-top: 3px; letter-spacing: -.5px; }
+  .stat .s { color: var(--dim); font-size: 12px; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { color: var(--dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+  input, select, textarea {
+    background: var(--bg3); border: 1px solid var(--line2); color: var(--txt);
+    border-radius: 8px; padding: 8px 11px; font: inherit; outline: none; width: 100%; transition: border-color .15s; }
+  input:focus, select:focus, textarea:focus { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
+  label { display: block; font-size: 12px; color: var(--dim); margin: 10px 0 4px; }
+  button { background: var(--acc); color: #fff; border: 1px solid transparent; border-radius: 8px;
+    padding: 8px 14px; font: inherit; cursor: pointer; font-weight: 500; transition: all .15s; }
+  button:hover { filter: brightness(1.12); }
+  button.ghost { background: transparent; border-color: var(--line2); color: var(--txt2); }
+  button.ghost:hover { background: var(--bg3); color: var(--txt); }
+  button.danger { background: transparent; border-color: #5a2b2b; color: var(--err); }
+  button.danger:hover { background: #2a1416; }
+  button.sm { padding: 4px 10px; font-size: 12px; border-radius: 7px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; letter-spacing: .3px; }
+  .pill.subscription { background: rgba(139,92,246,.13); color: var(--tier-sub); }
+  .pill.cheap { background: rgba(34,197,94,.12); color: var(--tier-cheap); }
+  .pill.free { background: rgba(59,130,246,.13); color: var(--tier-free); }
+  .pill.off { background: var(--bg3); color: var(--dim); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .endpoint {
+    background: #0d1015; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; overflow-x: auto; }
+  .endpoint .curl { color: var(--dim); white-space: pre; }
+  .endpoint b { color: var(--acc2); }
+  .copy { cursor: pointer; color: var(--dim); padding: 2px 6px; border-radius: 6px; }
+  .copy:hover { color: var(--txt); background: var(--bg3); }
+  .bar { height: 8px; border-radius: 999px; background: var(--bg3); overflow: hidden; min-width: 90px; }
+  .bar > i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--acc), var(--acc2)); }
+  .empty { color: var(--dim); text-align: center; padding: 34px 10px; }
+  .modal { position: fixed; inset: 0; background: rgba(4,6,9,.72); display: none; place-items: center; z-index: 50; }
+  .modal.open { display: grid; }
+  .modal .box { width: min(560px, 92vw); max-height: 88vh; overflow: auto; background: var(--bg2);
+    border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+  .toast { position: fixed; bottom: 18px; right: 18px; background: var(--bg3); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 14px; opacity: 0; transform: translateY(6px); transition: all .2s;
+    z-index: 60; pointer-events: none; font-size: 13px; }
+  .toast.show { opacity: 1; transform: none; }
+  pre.logline { white-space: pre-wrap; word-break: break-word; font-size: 12px; margin: 0; }
+  .logrow { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: var(--bg3); }
+  .sep { height: 1px; background: var(--line); margin: 14px 0; }
+  .kv { display: grid; grid-template-columns: 130px 1fr; gap: 4px 10px; font-size: 13px; }
+  .kv .k { color: var(--dim); }
+  .footer { color: var(--dim); font-size: 12px; text-align: center; margin-top: 26px; }
+  details summary { cursor: pointer; color: var(--dim); }
+  .hero {
+    display: flex; gap: 18px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+    background: linear-gradient(120deg, #111827, #0a0a0a 55%, #131014);
+    border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; margin-bottom: 18px;
+  }
+  .hero h2 { margin: 0 0 4px; font-size: 20px; letter-spacing: -.3px; }
+  .hero p { margin: 0; color: var(--dim); font-size: 13px; }
+  .range { accent-color: var(--acc); }
+  @media (max-width: 720px) { .tabs { width: 100%; } .kv { grid-template-columns: 1fr; } }
+
+  /* ─── live activity map ──────────────────────────────────────────── */
+  .live-2col { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 980px) { .live-2col { grid-template-columns: 1fr; } }
+  .live-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; flex-wrap: wrap; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--acc2); display: inline-block;
+    box-shadow: 0 0 0 0 rgba(34,197,94,.5); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,.45); } 70% { box-shadow: 0 0 0 9px rgba(34,197,94,0); } 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); } }
+  .live-row { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+    background: var(--bg2); font-size: 12.5px; animation: fadein .25s ease; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+  .live-row.running { border-color: rgba(59,130,246,.4); background: linear-gradient(90deg, rgba(59,130,246,.07), var(--bg2) 40%); }
+  .live-row.ok { border-left: 3px solid var(--acc2); }
+  .live-row.error { border-left: 3px solid var(--err); }
+  .chain { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .chain .node { padding: 2px 9px; border-radius: 7px; background: var(--bg4); border: 1px solid var(--line2);
+    font-size: 11px; font-family: ui-monospace, Menlo, Consolas, monospace; white-space: nowrap; }
+  .chain .node.inj { background: rgba(139,92,246,.14); border-color: rgba(139,92,246,.4); color: #c4b5fd; }
+  .chain .node.tx  { background: rgba(59,130,246,.13); border-color: rgba(59,130,246,.4); color: #93c5fd; }
+  .chain .arr { color: var(--dim); font-size: 11px; }
+  .st-pill { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .4px; }
+  .st-pill.running { background: rgba(59,130,246,.16); color: #93c5fd; }
+  .st-pill.ok { background: rgba(34,197,94,.15); color: #86efac; }
+  .st-pill.error { background: rgba(239,68,68,.16); color: #fca5a5; }
+  .mono-sm { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; color: var(--dim); }
+
+  /* live circuit map */
+  #mapWrap { position: relative; width: 100%; height: clamp(200px, 32vh, 330px); overflow: hidden; }
+  #mapSvg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #mapNodes { position: absolute; inset: 0; }
+  .c-col-label { position: absolute; transform: translate(-50%,-60%); top: 6px; font-size: 9.5px;
+    font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; pointer-events: none; }
+  .c-chip { position: absolute; transform: translate(-50%,-50%); display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px; border-radius: 7px; font-size: 10.5px; white-space: nowrap;
+    background: var(--bg3); border: 1px solid var(--line2); color: var(--txt2); z-index: 2; }
+  .c-chip.router { font-weight: 700; color: #93c5fd; border-color: rgba(59,130,246,.45); background: rgba(59,130,246,.1); }
+  .c-chip.inj.on { color: #c4b5fd; border-color: rgba(139,92,246,.55); background: rgba(139,92,246,.12); }
+  .c-chip.inj.off { color: var(--dim); background: transparent; border-style: dashed; }
+  .c-chip.prov { font-weight: 700; color: var(--acc2); border-color: rgba(34,197,94,.4); }
+  .c-chip.prov.run { box-shadow: 0 0 0 1px rgba(34,197,94,.3), 0 0 16px rgba(34,197,94,.2); }
+  .c-chip.prov.err { color: var(--err); border-color: rgba(239,68,68,.55); }
+  .c-chip.model { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10px; color: var(--warn); border-color: rgba(245,158,11,.35); }
+  .c-chip.model.run { color: #fcd34d; box-shadow: 0 0 0 1px rgba(245,158,11,.3), 0 0 16px rgba(245,158,11,.15); }
+  .c-chip.model.err { color: var(--err); border-color: rgba(239,68,68,.55); }
+  .c-chip .live-dot { width: 6px; height: 6px; }
+  .c-cnt { background: var(--bg); border-radius: 999px; padding: 0 5px; font-size: 9px; color: var(--dim); }
+  .m-edge { stroke: var(--line2); stroke-width: 1.2; fill: none; }
+  .m-edge.warm { stroke: rgba(59,130,246,.3); stroke-dasharray: 3 6; }
+  .m-flow { stroke: var(--acc); stroke-width: 2; fill: none; stroke-dasharray: 4 10; opacity: 0; transition: opacity .15s; }
+  .m-flow.on { opacity: 1; animation: m-dash 0.7s linear infinite; }
+  .m-flow.inj { stroke: #a78bfa; stroke-width: 2.4; filter: drop-shadow(0 0 4px rgba(167,139,250,.8)); }
+  .m-flow.err { stroke: var(--err); }
+  @keyframes m-dash { to { stroke-dashoffset: -14; } }
+  .live-empty { color: var(--dim); text-align: center; padding: 26px 10px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="logo"><span class="dot">⌘</span> krouter</div>
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-tab="providers">Providers</div>
+    <div class="tab" data-tab="combos">Combos</div>
+    <div class="tab" data-tab="injections">Injections</div>
+    <div class="tab" data-tab="usage">Activity</div>
+    <div class="tab" data-tab="logs">Logs</div>
+    <div class="tab" data-tab="settings">Settings</div>
+  </div>
+  <div class="spacer"></div>
+  <span class="badge" id="uptime">—</span>
+  <span class="badge">port <span id="port">—</span></span>
+  <a href="https://github.com/decolua/9router" target="_blank" rel="noreferrer" style="color:var(--dim)">9router↗</a>
+</header>
+
+<main>
+  <div class="hero">
+    <div>
+      <h2>One router. Many providers. Zero downtime.</h2>
+      <p>OpenAI-compatible gateway with 3-tier fallback, format translation, RTK token saver &amp; combos.</p>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button id="btnAdd">+ Add provider</button>
+      <button class="ghost" id="btnRefresh">Refresh</button>
+    </div>
+  </div>
+
+  <section id="tab-providers">
+    <div class="card">
+      <h3>Endpoint — point your CLI tool here</h3>
+      <div class="endpoint">
+<span class="curl">Endpoint:  <b id="ep">http://localhost:20128/v1</b>  <span class="copy" data-copy="ep">copy</span>
+API key:   <b id="key">…</b>  <span class="copy" data-copy="key">copy</span>
+Model:     <b>kr/auto</b>  or  <span style="color:var(--dim)">alias/model</span>  or  <span style="color:var(--dim)">combo/&lt;name&gt;</span>
+Bypass:    header <b>X-Krouter-Token-Saver: off</b> (savers) · <b>X-Krouter-Inject: off</b> (injections)
+
+curl example:
+  curl <b id="ep2">http://localhost:20128/v1</b>/chat/completions \
+    -H "Authorization: Bearer <span id="key2">…</span>" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"kr/auto","messages":[{"role":"user","content":"hello"}]}'</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Providers <span class="badge" id="provCount">0</span></h3>
+      <div id="providerList"><div class="empty">loading…</div></div>
+    </div>
+  </section>
+
+  <section id="tab-combos" style="display:none">
+    <div class="card">
+      <h3>Combos <span class="badge" id="comboCount">0</span></h3>
+      <p style="color:var(--dim);margin:0 0 12px;font-size:13px">Chain providers into one virtual model. Fallback order = list order. Use as <code>combo/&lt;id&gt;</code>.</p>
+      <div id="comboList"><div class="empty">no combos yet</div></div>
+      <div class="sep"></div>
+      <h3>New combo</h3>
+      <div class="row">
+        <div style="flex:1;min-width:160px"><label>Name</label><input id="comboName" placeholder="free-forever"></div>
+        <div style="flex:2;min-width:240px"><label>Providers (ordered, format: <code>providerId</code> or <code>providerId:model</code>, comma separated)</label>
+          <input id="comboProviders" placeholder="prov-abc:glm-4.7, prov-def, prov-ghi:claude-sonnet-4.5"></div>
+        <div style="align-self:flex-end"><button id="btnCombo">Create</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-injections" style="display:none">
+    <div class="card">
+      <h3>Prompt injections <span class="badge" id="injCount">0</span></h3>
+      <p style="color:var(--dim);margin:0 0 12px;font-size:13px">
+        Inject a system prompt into every request matching a pattern — per model (<code>mb/zai-org/GLM-5.3</code>),
+        per provider (<code>mb/*</code>), or global (<code>*</code>). All matching rules apply in list order.
+        Bypass for one request: header <code>X-Krouter-Inject: off</code>.</p>
+      <div id="injList"><div class="empty">no injection rules yet</div></div>
+    </div>
+    <div class="card">
+      <h3 id="injFormTitle">New rule</h3>
+      <label>Quick presets (refusal-softening archetypes)</label>
+      <div class="row">
+        <select id="injPresetSel" style="flex:2;min-width:200px"><option value="">— pilih preset —</option></select>
+        <button class="ghost" id="btnInjPresetApply" style="flex:0">Apply preset</button>
+      </div>
+      <label>Pattern</label>
+      <input id="injPattern" placeholder="mb/zai-org/GLM-5.3  ·  mb/*  ·  *">
+      <div style="margin:4px 0 0"><button class="ghost sm" id="btnInjTest">Preview matches</button>
+        <span id="injTestOut" style="color:var(--dim);font-size:12px"></span></div>
+      <label>Prompt (system message) — kosongkan kalau pakai transform</label>
+      <textarea id="injPrompt" rows="4" placeholder="Selalu jawab dalam bahasa Indonesia formal."></textarea>
+      <label>Transform (router-level, opsional — ubah bentuk pesan, bukan cuma inject)</label>
+      <select id="injTransform">
+        <option value="">— none (pakai prompt di atas —</option>
+        <option value="base64">base64 encode (filter nggak lihat plaintext)</option>
+        <option value="fiction">fiction wrap (scene novel)</option>
+        <option value="academic">academic wrap (jurnal sejarah militer)</option>
+        <option value="prefill">assistant prefill (model lanjut, bukan mulai)</option>
+      </select>
+      <div class="row" style="margin-top:10px">
+        <div style="flex:1;min-width:140px"><label>Position</label>
+          <select id="injPosition">
+            <option value="prepend">prepend (awal system)</option>
+            <option value="append">append (system paling akhir)</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:120px"><label>Enabled</label>
+          <select id="injEnabled">
+            <option value="1">enabled</option>
+            <option value="0">disabled</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button id="btnInjSave">Save rule</button>
+        <button class="ghost" id="btnInjCancelEdit" style="display:none">Cancel edit</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-usage" style="display:none">
+    <div class="card">
+      <div class="live-head">
+        <div><b style="font-size:15px"><span class="live-dot"></span>&nbsp; Live activity</b>
+          <div class="mono-sm">router → injection → provider → model → router — live request flow</div></div>
+        <div class="row" style="gap:14px">
+          <span class="badge" id="liveInflight">0 running</span>
+          <span class="badge" id="liveRps">0 req/min</span>
+          <label style="margin:0;display:flex;gap:6px;align-items:center;font-size:12px;color:var(--dim)">
+            <input type="checkbox" id="livePause" style="width:auto"> pause
+          </label>
+        </div>
+      </div>
+      <div id="mapWrap">
+        <svg id="mapSvg"></svg>
+        <div id="mapNodes"></div>
+      </div>
+    </div>
+    <div class="live-2col" style="margin-top:16px">
+      <div id="liveStream"><div class="live-empty">waiting for requests…</div></div>
+      <div>
+        <div style="margin-bottom:16px">
+          <b style="font-size:13px">Per-provider usage</b>
+          <div id="usageTable" style="margin-top:8px"><div class="live-empty">no usage yet</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="grid" id="statGrid" style="margin-top:16px"></div>
+  </section>
+
+  <section id="tab-logs" style="display:none">
+    <div class="card">
+      <h3>Request log <span class="badge" id="logCount">0</span></h3>
+      <div id="logList"><div class="empty">no requests yet</div></div>
+    </div>
+  </section>
+
+  <section id="tab-settings" style="display:none">
+    <div class="card">
+      <h3>Token savers &amp; output shaping</h3>
+      <div class="row" style="justify-content:space-between">
+        <div><b>RTK token saver</b><div style="color:var(--dim);font-size:12px">Compress tool outputs (git diff, grep, ls…) before the provider. Lossless, safe, fails open.</div></div>
+        <label style="margin:0;display:flex;gap:8px;align-items:center"><input type="checkbox" id="setRtk" style="width:auto"> enabled</label>
+      </div>
+      <div class="sep"></div>
+      <div class="row" style="justify-content:space-between">
+        <div><b>Caveman mode</b><div style="color:var(--dim);font-size:12px">Inject terse-style system prompt. 0 = off, 5 = maximum terseness. Saves up to 65% output tokens.</div></div>
+        <div style="display:flex;gap:10px;align-items:center;min-width:220px">
+          <input type="range" class="range" id="setCaveman" min="0" max="5" step="1" style="width:100%">
+          <span class="badge" id="cavemanVal">0</span>
+        </div>
+      </div>
+      <div class="sep"></div>
+      <div class="row" style="justify-content:space-between">
+        <div><b>Ponytail</b><div style="color:var(--dim);font-size:12px">"Lazy senior dev" prompt — minimal, YAGNI-first code.</div></div>
+        <select id="setPonytail" style="max-width:170px">
+          <option value="off">off</option><option value="lite">lite</option>
+          <option value="full">full</option><option value="ultra">ultra</option>
+        </select>
+      </div>
+      <div class="sep"></div>
+      <div class="row" style="justify-content:space-between">
+        <div><b>Request logging</b><div style="color:var(--dim);font-size:12px">Write every request to data/requests.log for debugging.</div></div>
+        <label style="margin:0;display:flex;gap:8px;align-items:center"><input type="checkbox" id="setLogs" style="width:auto"> enabled</label>
+      </div>
+      <div class="sep"></div>
+      <div class="row">
+        <button id="btnSaveSettings">Save settings</button>
+        <button class="ghost" id="btnUsageReset">Reset usage stats</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>API key</h3>
+      <div class="row">
+        <div style="flex:1"><input id="setApiKey" placeholder="kr-…"></div>
+        <button id="btnRotate">Rotate key</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer">krouter · OpenAI-compatible LLM router · inspired by <a href="https://9router.com" target="_blank" rel="noreferrer">9router</a> · runs locally, zero dependencies</div>
+</main>
+
+<!-- add/edit provider modal -->
+<div class="modal" id="modal">
+  <div class="box">
+    <h3 id="modalTitle" style="margin-top:0">Add provider</h3>
+    <div class="row">
+      <div style="flex:1"><label>Name</label><input id="pName" placeholder="GLM Coding"></div>
+      <div style="flex:1"><label>Alias (used in model ids)</label><input id="pAlias" placeholder="glm"></div>
+    </div>
+    <div class="row">
+      <div style="flex:1"><label>Kind</label>
+        <select id="pKind">
+          <option value="openai">OpenAI-compatible (chat/completions)</option>
+          <option value="anthropic">Anthropic (native Messages API)</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+      <div style="flex:1"><label>Tier</label>
+        <select id="pTier">
+          <option value="subscription">subscription</option>
+          <option value="cheap">cheap</option>
+          <option value="free">free</option>
+        </select>
+      </div>
+    </div>
+    <label>Base URL</label>
+    <input id="pBaseUrl" placeholder="https://open.bigmodel.cn/api/paas/v4">
+    <label>API keys (one per line, bulk OK — leave empty to add later)</label>
+    <textarea id="pApiKey" placeholder="sk-…&#10;sk-…&#10;sk-…" rows="3" style="width:100%;font-family:inherit;font-size:13px"></textarea>
+    <label>Models (comma separated, optional — leave empty to auto-fetch)</label>
+    <input id="pModels" placeholder="glm-4.7, glm-4.6">
+    <label>Anthropic version (anthropic kind only)</label>
+    <input id="pAnthVer" placeholder="2023-06-01">
+    <div class="sep"></div>
+    <div class="row" style="justify-content:flex-end">
+      <button class="ghost" id="btnTest">Test connection</button>
+      <button class="ghost" id="btnCancel">Cancel</button>
+      <button id="btnSave">Save provider</button>
+    </div>
+    <div id="testResult" style="margin-top:10px;font-size:12px;color:var(--dim)"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast">saved</div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+const state = { providers: [], combos: [], injections: [], usage: {}, quota: {}, endpoint: {}, apiKey: "", port: 20128 };
+
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove("show"), 1600);
+}
+function fmt(n) { return (n || 0).toLocaleString(); }
+function pct(a, b) { return b > 0 ? Math.min(100, Math.round((a / b) * 100)) : 0; }
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function timeAgo(ts) {
+  if (!ts) return "—";
+  const s = Math.round((Date.now() - ts) / 1000);
+  if (s < 60) return s + "s ago";
+  if (s < 3600) return Math.round(s / 60) + "m ago";
+  if (s < 86400) return Math.round(s / 3600) + "h ago";
+  return new Date(ts).toLocaleDateString();
+}
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, {
+    method: opts.method || "GET",
+    headers: { "Content-Type": "application/json" },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({})).error || {}).message || r.status);
+  return r.json();
+}
+
+async function load() {
+  try {
+    const s = await api("/api/state");
+    Object.assign(state, s);
+    render();
+  } catch (e) {
+    $("#providerList").innerHTML = '<div class="empty">failed to load state: ' + esc(e.message) + "</div>";
+  }
+}
+
+function render() {
+  $("#port").textContent = state.port;
+  $("#uptime").textContent = "v1.0.0 · up " + Math.round(state.uptime || 0) + "s";
+  $("#ep").textContent = location.origin + "/v1";
+  $("#ep2").textContent = location.origin + "/v1";
+  $("#key").textContent = state.apiKey;
+  $("#key2").textContent = state.apiKey;
+  $("#provCount").textContent = state.providers.length;
+  $("#comboCount").textContent = state.combos.length;
+
+  renderProviders();
+  renderCombos();
+  renderInjections();
+  renderUsage();
+  renderSettings();
+}
+
+function renderProviders() {
+  const list = $("#providerList");
+  if (!state.providers.length) {
+    list.innerHTML = '<div class="empty">no providers yet. <a href="#" onclick="return false" id="emptyAdd">add one</a> to start routing.</div>';
+    const a = document.getElementById("emptyAdd");
+    if (a) a.onclick = (e) => { e.preventDefault(); openModal(); };
+    return;
+  }
+  const rows = state.providers
+    .slice()
+    .sort((a, b) => ({ subscription: 0, cheap: 1, free: 2 }[a.tier] ?? 9) - ({ subscription: 0, cheap: 1, free: 2 }[b.tier] ?? 9))
+    .map((p) => {
+      const q = state.quota[p.id] || { used: 0, limit: 0, resetsAt: 0 };
+      const u = state.usage[p.id] || { requests: 0, tokensIn: 0, tokensOut: 0 };
+      const qPct = q.limit > 0 ? pct(q.used, q.limit) : 0;
+      const ids = p.models && p.models.length
+        ? p.models.slice(0, 3).map((m) => "<code>" + esc((p.alias || p.id) + "/" + m) + "</code>").join(" ") +
+          (p.models.length > 3 ? ' <span class="badge">+' + (p.models.length - 3) + "</span>" : "")
+        : "<code>" + esc((p.alias || p.id) + "/auto") + "</code>";
+      return `<tr>
+        <td><b>${esc(p.name)}</b><div style="color:var(--dim);font-size:12px">${esc(p.id)} · ${esc(p.kind)}</div></td>
+        <td><span class="pill ${p.tier}">${esc(p.tier)}</span>
+          ${p.enabled === false ? '<span class="pill off">disabled</span>' : ""}</td>
+        <td>${ids}</td>
+        <td>${fmt(u.requests)} req<br><span style="color:var(--dim);font-size:12px">${fmt(u.tokensIn + u.tokensOut)} tok</span></td>
+        <td>${q.limit > 0 ? `<div class="bar"><i style="width:${qPct}%"></i></div><div style="color:var(--dim);font-size:12px;margin-top:3px">${fmt(q.used)}/${fmt(q.limit)}${q.resetsAt ? " · reset " + new Date(q.resetsAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}</div>` : '<span style="color:var(--dim)">unlimited</span>'}</td>
+        <td style="white-space:nowrap">
+          <button class="ghost sm" data-act="keys" data-id="${esc(p.id)}">keys <span class="badge">${(p.keys || []).length}</span></button>
+          <button class="ghost sm" data-act="edit" data-id="${esc(p.id)}">edit</button>
+          <button class="ghost sm" data-act="fetch" data-id="${esc(p.id)}">fetch models</button>
+          <button class="ghost sm" data-act="toggle" data-id="${esc(p.id)}">${p.enabled === false ? "enable" : "disable"}</button>
+          <button class="danger sm" data-act="del" data-id="${esc(p.id)}">delete</button>
+        </td>
+      </tr>`;
+    })
+    .join("");
+  list.innerHTML = `<table>
+    <thead><tr><th>Provider</th><th>Tier</th><th>Models</th><th>Usage</th><th>Quota</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+
+  $$("#providerList button[data-act]").forEach((b) => {
+    b.onclick = () => providerAction(b.dataset.act, b.dataset.id);
+  });
+}
+
+async function providerAction(act, id) {
+  const p = state.providers.find((x) => x.id === id);
+  if (!p) return;
+  if (act === "edit") openModal(p);
+  if (act === "keys") openKeyModal(p);
+  if (act === "del") {
+    if (!confirm("delete provider " + p.name + "?")) return;
+    await api("/api/providers/delete", { method: "POST", body: { id } });
+    toast("provider deleted");
+    load();
+  }
+  if (act === "toggle") {
+    await api("/api/providers/" + id, { method: "POST", body: { enabled: p.enabled !== false ? false : true } });
+    toast("updated");
+    load();
+  }
+  if (act === "fetch") {
+    toast("fetching models…");
+    const r = await api("/api/fetch-models", { method: "POST", body: { id } });
+    if (r.error) toast("fetch failed: " + r.error);
+    else toast("fetched " + (r.models || []).length + " models");
+    load();
+  }
+}
+
+// ── api key pool modal ───────────────────────────────────────────────────
+function openKeyModal(p) {
+  let m = document.getElementById("keyModal");
+  if (!m) {
+    m = document.createElement("div");
+    m.className = "modal";
+    m.id = "keyModal";
+    m.innerHTML = `<div class="box">
+      <h3 id="kmTitle" style="margin-top:0">Manage keys</h3>
+      <div id="kmList"></div>
+      <div class="sep"></div>
+      <label>Add keys (one per line, bulk OK)</label>
+      <textarea id="kmNew" rows="4" placeholder="sk-…&#10;sk-…" style="width:100%;font-family:inherit;font-size:13px"></textarea>
+      <div class="sep"></div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="ghost" id="kmCancel">Close</button>
+        <button id="kmAdd">Add keys</button>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    m.addEventListener("click", (e) => { if (e.target.id === "keyModal") m.classList.remove("open"); });
+    document.getElementById("kmCancel").onclick = () => m.classList.remove("open");
+    document.getElementById("kmAdd").onclick = async () => {
+      const keys = document.getElementById("kmNew").value.split("\n").map((s) => s.trim()).filter(Boolean);
+      if (!keys.length) return toast("paste keys first");
+      try {
+        const r = await api("/api/providers/" + m._pid + "/keys", { method: "POST", body: { keys } });
+        toast("+" + r.added + " keys (total " + r.total + ")");
+        document.getElementById("kmNew").value = "";
+        load();
+        renderKeyList(state.providers.find((x) => x.id === m._pid));
+      } catch (e) { toast("error: " + e.message); }
+    };
+  }
+  m._pid = p.id;
+  document.getElementById("kmTitle").textContent = "Keys — " + p.name;
+  renderKeyList(p);
+  m.classList.add("open");
+}
+
+function renderKeyList(p) {
+  const el = document.getElementById("kmList");
+  const keys = p.keys || [];
+  if (!keys.length) { el.innerHTML = '<div class="empty">no keys yet. add below.</div>'; return; }
+  el.innerHTML = keys.map((k) => `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--border);align-items:center">
+    <div style="flex:1"><code>${esc(k.preview)}</code> <span style="color:var(--dim);font-size:12px">${esc(k.label)} · ${k.uses} uses</span>
+      ${k.enabled === false ? '<span class="pill off">disabled</span>' : ""}
+      ${k.lastError ? '<div style="color:var(--err);font-size:12px">' + esc(k.lastError) + "</div>" : ""}
+    </div>
+    <button class="ghost sm" data-ktoggle="${esc(k.id)}">${k.enabled === false ? "enable" : "disable"}</button>
+    <button class="danger sm" data-kdel="${esc(k.id)}">delete</button>
+  </div>`).join("");
+  el.querySelectorAll("button[data-ktoggle]").forEach((b) => {
+    b.onclick = async () => {
+      await api("/api/providers/" + p.id + "/keys/toggle", { method: "POST", body: { id: b.dataset.ktoggle } });
+      load();
+      renderKeyList(state.providers.find((x) => x.id === p.id));
+    };
+  });
+  el.querySelectorAll("button[data-kdel]").forEach((b) => {
+    b.onclick = async () => {
+      if (!confirm("delete key?")) return;
+      await api("/api/providers/" + p.id + "/keys/delete", { method: "POST", body: { id: b.dataset.kdel } });
+      load();
+      renderKeyList(state.providers.find((x) => x.id === p.id));
+    };
+  });
+}
+
+function renderCombos() {
+  const list = $("#comboList");
+  if (!state.combos.length) {
+    list.innerHTML = '<div class="empty">no combos yet. create one to chain providers with automatic fallback.</div>';
+    return;
+  }
+  list.innerHTML = state.combos
+    .map((c) => {
+      const chain = c.providers
+        .map((entry) => {
+          const [pid, model] = String(entry).split(":");
+          const p = state.providers.find((x) => x.id === pid);
+          const name = p ? p.name : pid;
+          const modelPart = model ? ` <span style="color:var(--dim)">:${esc(model)}</span>` : "";
+          return `<div style="padding:3px 0"><span class="pill ${p ? p.tier : "off"}">${p ? esc(p.tier) : "?"}</span> ${esc(name)}${modelPart}</div>`;
+        })
+        .join('<div style="color:var(--dim);padding:0 4px">↓</div>');
+      return `<div class="card" style="margin-bottom:10px">
+        <div class="row" style="justify-content:space-between">
+          <div><b>${esc(c.name)}</b> <span class="badge">combo/${esc(c.id)}</span></div>
+          <button class="danger sm" data-combo-del="${esc(c.id)}">delete</button>
+        </div>
+        <div style="margin-top:8px">${chain}</div>
+      </div>`;
+    })
+    .join("");
+  $$("#comboList button[data-combo-del]").forEach((b) => {
+    b.onclick = async () => {
+      if (!confirm("delete combo?")) return;
+      await api("/api/combos/delete", { method: "POST", body: { id: b.dataset.comboDel } });
+      toast("combo deleted");
+      load();
+    };
+  });
+}
+
+function renderInjections() {
+  const list = $("#injList");
+  $("#injCount").textContent = state.injections.length;
+  if (!state.injections.length) {
+    list.innerHTML = '<div class="empty">no injection rules yet. add one below.</div>';
+    return;
+  }
+  const rows = state.injections
+    .map((r) => {
+      const prompt = esc(r.prompt.length > 90 ? r.prompt.slice(0, 90) + "…" : r.prompt);
+      return `<tr>
+        <td><code>${esc(r.pattern)}</code></td>
+        <td style="max-width:380px">${r.transform ? '<span class="pill cheap">tx:' + esc(r.transform) + "</span> " : ""}${prompt}</td>
+        <td><span class="badge">${r.position === "append" ? "append" : "prepend"}</span></td>
+        <td>${r.enabled === false ? '<span class="pill off">off</span>' : '<span class="pill free">on</span>'}</td>
+        <td style="white-space:nowrap">
+          <button class="ghost sm" data-inj-edit="${esc(r.id)}">edit</button>
+          <button class="ghost sm" data-inj-toggle="${esc(r.id)}">${r.enabled === false ? "enable" : "disable"}</button>
+          <button class="danger sm" data-inj-del="${esc(r.id)}">delete</button>
+        </td>
+      </tr>`;
+    })
+    .join("");
+  list.innerHTML = `<table>
+    <thead><tr><th>Pattern</th><th>Prompt</th><th>Pos</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+  $$("#injList button[data-inj-edit]").forEach((b) => {
+    b.onclick = () => {
+      const r = state.injections.find((x) => x.id === b.dataset.injEdit);
+      if (!r) return;
+      injEditId = r.id;
+      $("#injFormTitle").textContent = "Edit rule";
+      $("#injPattern").value = r.pattern;
+      $("#injPrompt").value = r.prompt || "";
+      $("#injTransform").value = r.transform || "";
+      $("#injPosition").value = r.position === "append" ? "append" : "prepend";
+      $("#injEnabled").value = r.enabled === false ? "0" : "1";
+      $("#btnInjCancelEdit").style.display = "";
+      $("#btnInjSave").textContent = "Update rule";
+    };
+  });
+  $$("#injList button[data-inj-del]").forEach((b) => {
+    b.onclick = async () => {
+      if (!confirm("delete injection rule?")) return;
+      await api("/api/injections/delete", { method: "POST", body: { id: b.dataset.injDel } });
+      toast("rule deleted");
+      load();
+    };
+  });
+  $$("#injList button[data-inj-toggle]").forEach((b) => {
+    b.onclick = async () => {
+      const r = state.injections.find((x) => x.id === b.dataset.injToggle);
+      if (!r) return;
+      await api("/api/injections/" + r.id, {
+        method: "POST",
+        body: { enabled: r.enabled === false ? true : false },
+      });
+      toast("updated");
+      load();
+    };
+  });
+}
+
+let injEditId = null;
+let injPresets = [];
+
+async function loadInjPresets() {
+  try {
+    const r = await api("/api/injections/presets");
+    injPresets = r.presets || [];
+    $("#injPresetSel").innerHTML =
+      '<option value="">— pilih preset —</option>' +
+      injPresets.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
+  } catch {
+    /* presets are optional */
+  }
+}
+loadInjPresets();
+
+$("#btnInjPresetApply").onclick = () => {
+  const id = $("#injPresetSel").value;
+  const p = injPresets.find((x) => x.id === id);
+  if (!p) return;
+  injEditId = null;
+  $("#injFormTitle").textContent = "New rule — " + p.name;
+  $("#injPattern").value = p.pattern || "*";
+  $("#injPrompt").value = p.prompt || "";
+  $("#injTransform").value = p.transform || "";
+  $("#injPosition").value = p.position === "append" ? "append" : "prepend";
+  $("#injEnabled").value = "1";
+  $("#btnInjCancelEdit").style.display = "";
+  $("#injTestOut").textContent = "";
+  toast("preset applied — adjust pattern lalu save");
+};
+
+function resetInjForm() {
+  injEditId = null;
+  $("#injFormTitle").textContent = "New rule";
+  $("#injPattern").value = "";
+  $("#injPrompt").value = "";
+  $("#injTransform").value = "";
+  $("#injPosition").value = "prepend";
+  $("#injEnabled").value = "1";
+  $("#btnInjCancelEdit").style.display = "none";
+  $("#btnInjSave").textContent = "Save rule";
+  $("#injTestOut").textContent = "";
+}
+$("#btnInjCancelEdit").onclick = resetInjForm;
+
+$("#btnInjSave").onclick = async () => {
+  const pattern = $("#injPattern").value.trim();
+  const prompt = $("#injPrompt").value.trim();
+  const transform = $("#injTransform").value;
+  if (!pattern || (!prompt && !transform)) return toast("pattern + (prompt atau transform) required");
+  try {
+    await api("/api/injections", {
+      method: "POST",
+      body: {
+        id: injEditId || undefined,
+        pattern,
+        prompt,
+        transform: transform || null,
+        position: $("#injPosition").value,
+        enabled: $("#injEnabled").value !== "0",
+      },
+    });
+    toast(injEditId ? "rule updated" : "rule added");
+    resetInjForm();
+    load();
+  } catch (e) {
+    toast("error: " + e.message);
+  }
+};
+
+$("#btnInjTest").onclick = async () => {
+  const pattern = $("#injPattern").value.trim();
+  if (!pattern) return;
+  try {
+    const r = await api("/api/injections/test", { method: "POST", body: { pattern } });
+    $("#injTestOut").innerHTML = r.matches.length
+      ? '<span style="color:var(--acc2)">matches: </span>' + r.matches.map((m) => "<code>" + esc(m) + "</code>").join(" ")
+      : '<span style="color:var(--warn)">matches nothing</span>';
+  } catch (e) {
+    $("#injTestOut").textContent = "test failed: " + e.message;
+  }
+};
+
+function renderUsage() {
+  const ids = Object.keys(state.usage);
+  const totals = ids.reduce(
+    (a, id) => {
+      const u = state.usage[id];
+      a.req += u.requests || 0;
+      a.tin += u.tokensIn || 0;
+      a.tout += u.tokensOut || 0;
+      return a;
+    },
+    { req: 0, tin: 0, tout: 0 }
+  );
+  $("#statGrid").innerHTML = `
+    <div class="stat"><div class="k">Total requests</div><div class="v">${fmt(totals.req)}</div><div class="s">since last reset</div></div>
+    <div class="stat"><div class="k">Input tokens</div><div class="v">${fmt(totals.tin)}</div><div class="s">after RTK compression</div></div>
+    <div class="stat"><div class="k">Output tokens</div><div class="v">${fmt(totals.tout)}</div><div class="s">generated</div></div>
+    <div class="stat"><div class="k">Providers in use</div><div class="v">${ids.length}</div><div class="s">of ${state.providers.length} configured</div></div>`;
+
+  if (!ids.length) {
+    $("#usageTable").innerHTML = '<div class="empty">no usage recorded yet</div>';
+    return;
+  }
+  const rows = ids
+    .map((id) => {
+      const p = state.providers.find((x) => x.id === id);
+      const u = state.usage[id];
+      const days = (u.history || []).slice(-14).map((d) => [d.day.slice(5), d.requests]);
+      const spark = days.length
+        ? `<div style="display:flex;gap:2px;align-items:flex-end;height:26px">${days
+            .map(([d, r]) => {
+              const h = Math.max(2, Math.round((r / Math.max(1, ...days.map((x) => x[1]))) * 24));
+              return `<div title="${d}: ${r} requests" style="width:7px;height:${h}px;background:var(--acc);border-radius:2px;opacity:.8"></div>`;
+            })
+            .join("")}</div>`
+        : "";
+      return `<tr>
+        <td><b>${esc(p ? p.name : id)}</b><div style="color:var(--dim);font-size:12px">${esc(id)}</div></td>
+        <td>${fmt(u.requests)}</td>
+        <td>${fmt(u.tokensIn)}</td>
+        <td>${fmt(u.tokensOut)}</td>
+        <td>${fmt((u.tokensIn || 0) + (u.tokensOut || 0))}</td>
+        <td>${timeAgo(u.lastRequest)}</td>
+        <td>${spark}</td>
+      </tr>`;
+    })
+    .join("");
+  $("#usageTable").innerHTML = `<table>
+    <thead><tr><th>Provider</th><th>Requests</th><th>Tokens in</th><th>Tokens out</th><th>Total</th><th>Last</th><th>14d</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+// ─── live activity map ────────────────────────────────────────────────────
+const live = { paused: false, data: { inflight: [], recent: [] }, seen: new Set(), counts: new Map(), errCounts: new Map() };
+let liveTimer = null;
+
+async function loadActivity() {
+  if (live.paused) return;
+  try {
+    const r = await fetch("/api/activity");
+    live.data = await r.json();
+    renderLive();
+  } catch { /* ignore */ }
+}
+
+function hmColor(n, errs, max) {
+  if (!n) return "";
+  const t = max > 0 ? Math.min(1, n / max) : 0;
+  if (errs > 0) {
+    const e = Math.min(1, errs / n);
+    return `background:rgba(239,68,68,${0.25 + 0.65 * e});${e > 0.5 || n - errs === 0 ? "border-color:rgba(239,68,68,.6)" : ""}`;
+  }
+  return `background:rgba(34,197,94,${0.12 + 0.72 * t});${t > 0.5 ? "border-color:rgba(34,197,94,.5)" : ""}`;
+}
+
+function renderLive() {
+  const { inflight, recent } = live.data;
+  $("#liveInflight").textContent = (inflight || []).length + " running";
+
+  // request rate: count finished in last 60s
+  const t = Date.now();
+  const last60 = (recent || []).filter((r) => t - (r.finishedAt || t) < 60_000).length;
+  $("#liveRps").textContent = last60 + " req/min";
+
+  const seen = live.seen;
+  const stream = $("#liveStream");
+  const rows = [];
+
+  for (const h of inflight || []) {
+    rows.push({
+      key: h.key, html: `<div class="live-row running">
+        <div class="row" style="justify-content:space-between">
+          <div><span class="st-pill running">running</span> <code style="font-size:12px">${esc(h.model)}</code>
+          ${h.stream ? '<span class="badge">stream</span>' : ""} <span class="mono-sm">${h.ms} ms elapsed</span></div>
+        </div>
+        <div class="chain">${chainHtml(h)}</div>
+      </div>`,
+    });
+  }
+  for (const h of recent || []) {
+    if (seen.has(h.key)) continue;
+    seen.add(h.key);
+    const stCls = h.status === "ok" ? "ok" : "error";
+    const stPill = h.status === "ok" ? '<span class="st-pill ok">ok</span>' : '<span class="st-pill error">failed</span>';
+    rows.push({
+      key: h.key,
+      html: `<div class="live-row ${stCls}">
+        <div class="row" style="justify-content:space-between">
+          <div>${stPill} <code style="font-size:12px">${esc(h.model)}</code>
+          ${h.stream ? '<span class="badge">stream</span>' : ""}
+          <span class="mono-sm">${h.ms} ms${h.tookAttempts > 1 ? " · failover ×" + h.tookAttempts : ""}${h.tokens ? " · " + fmt(h.tokens) + " tok" : ""}</span></div>
+          <span class="mono-sm">${timeAgo(t)}</span>
+        </div>
+        <div class="chain">${chainHtml(h)}</div>
+        ${h.error ? `<div style="color:var(--err);font-size:11px;margin-top:4px">${esc(h.error)}</div>` : ""}
+      </div>`,
+    });
+  }
+  if (rows.length) {
+    stream.insertAdjacentHTML("afterbegin", rows.map((r) => r.html).join(""));
+    // keep only the 5 most recent — older ones roll off the bottom
+    while (stream.children.length > 5) stream.lastChild.remove();
+  }
+  renderMap();
+}
+
+function chainHtml(h) {
+  const parts = [];
+  parts.push(`<span class="node">${esc(h.model || "kr/auto")}</span>`);
+  for (const r of h.rules || []) {
+    if (r.transform) parts.push(`<span class="arr">→</span><span class="node tx">tx:${esc(r.transform)}</span>`);
+    else if (r.prompt) parts.push(`<span class="arr">→</span><span class="node inj">${esc(r.pattern)}</span>`);
+  }
+  for (const a of h.attempts || []) {
+    parts.push(`<span class="arr">→</span><span class="node">${esc(a.provider)} <span style="color:var(--dim)">:${esc(a.model)}</span></span>`);
+  }
+  return parts.join("");
+}
+
+function renderMap() {
+  const wrap = $("#mapWrap");
+  const W = wrap.clientWidth || 720;
+  const H = wrap.clientHeight || 320;
+  const provs = state.providers || [];
+
+  // ── gather live models (running or seen in last 5 min)
+  const T5 = 5 * 60_000;
+  const t = Date.now();
+  const mAct = new Map(); // pid|model -> {inflight, err, inj, cnt}
+  const bumpM = (pid, model, st, inj) => {
+    const k2 = pid + "|" + model;
+    const a = mAct.get(k2) || { inflight: false, err: false, inj: false, cnt: 0 };
+    a.cnt++;
+    if (st === 'run') a.inflight = true;
+    if (st === 'failed' || st === 'error') a.err = true;
+    if (inj) a.inj = true;
+    mAct.set(k2, a);
+  };
+  for (const h of live.data.inflight || []) {
+    const inj = !!(h.rules && h.rules.length);
+    for (const a of h.attempts || []) bumpM(a.provider, a.model, 'run', inj);
+  }
+  for (const h of live.data.recent || []) {
+    if (t - (h.finishedAt || t) > T5) continue;
+    const inj = !!(h.rules && h.rules.length);
+    for (const a of h.attempts || []) bumpM(a.provider, a.model, a.status, inj);
+  }
+  // also count injection that comes from config rules (not only fired this request)
+  const injFor = (fullModelId) =>
+    (state.injections || []).some((r) => r.enabled !== false && matchGlob(r.pattern, fullModelId));
+
+  // live rows: one per model
+  const rows = [];
+  for (const [k2, a] of mAct) {
+    const [pid, model] = k2.split("|");
+    const p = provs.find((x) => x.id === pid);
+    if (!p) continue;
+    const full = (p.alias || p.id) + "/" + model;
+    rows.push({ p, model, a, inj: a.inj || injFor(full) });
+  }
+  rows.sort((x, y) => (y.a.inflight - x.a.inflight) || (y.a.cnt - x.a.cnt));
+  const show = rows.slice(0, 6);
+
+  const anyInj = show.some((r) => r.inj);
+
+  // ── column x positions — inject column matters once any row is injected
+  const colX = anyInj
+    ? { router: W * 0.08, inject: W * 0.30, prov: W * 0.55, model: W * 0.82 }
+    : { router: W * 0.10, prov: W * 0.40, model: W * 0.75 };
+
+  // rows distributed vertically; router node sits at vertical center
+  const rowGap = show.length > 1 ? Math.min(48, (H - 56) / (show.length - 1 || 1)) : 0;
+  const y0 = H / 2 - (rowGap * (show.length - 1)) / 2;
+  const routerY = H / 2;
+  const rowY = show.length === 1 ? routerY : y0;
+
+  // inject node: fanned around the router when there are injected rows
+  const injY = H * 0.5;
+
+  const line = (x1, y1, x2, y2, cls) => {
+    const mx = (x1 + x2) / 2;
+    return `<path class="${cls}" d="M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}"/>`;
+  };
+
+  let edges = "";
+  let html = "";
+
+  if (!show.length) {
+    html = `<div class="c-empty" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)">no model activity in the last 5 minutes — send a request to see the flow</div>`;
+  } else {
+    show.forEach((r, i) => {
+      const y = rowY + i * rowGap;
+      const flowCls = r.a.inflight ? "m-flow on" + (r.a.err ? " err" : r.inj ? " inj" : "") : "m-edge warm";
+      if (r.inj && anyInj) {
+        // this row is injected: router → inject → provider
+        edges += line(colX.router, routerY, colX.inject, y, "m-flow on inj");
+        edges += line(colX.inject, y, colX.prov, y, flowCls);
+      } else {
+        // clean row: router → provider directly, no inject
+        edges += line(colX.router, routerY, colX.prov, y, flowCls);
+      }
+      // provider → model
+      edges += line(colX.prov, y, colX.model, y, flowCls);
+    });
+
+    // chips per row
+    show.forEach((r, i) => {
+      const y = rowY + i * rowGap;
+      html += `<div class="c-chip prov ${r.a.inflight ? "run" : r.a.err ? "err" : ""}" style="left:${colX.prov}px;top:${y}px">${r.a.inflight ? '<span class="live-dot"></span>' : ""}${esc(r.p.name)}</div>`;
+      html += `<div class="c-chip model ${r.a.inflight ? "run" : r.a.err ? "err" : ""}" style="left:${colX.model}px;top:${y}px">${esc(r.model)}${r.a.cnt ? `<span class="c-cnt">${r.a.cnt}</span>` : ""}</div>`;
+      if (r.inj && anyInj) {
+        html += `<div class="c-chip inj on" style="left:${colX.inject}px;top:${y}px">⚡ Inject</div>`;
+      }
+    });
+    // router node (single)
+    const totalIn = (live.data.inflight || []).length;
+    html += `<div class="c-chip router" style="left:${colX.router}px;top:${routerY}px">${totalIn ? '<span class="live-dot"></span>' : ""}krouter</div>`;
+  }
+
+  // column labels
+  const colDefs = anyInj
+    ? [["router", "ROUTER", "var(--acc)"], ["inject", "INJECTION", "#a78bfa"], ["prov", "PROVIDER", "var(--acc2)"], ["model", "MODEL", "var(--warn)"]]
+    : [["router", "ROUTER", "var(--acc)"], ["prov", "PROVIDER", "var(--acc2)"], ["model", "MODEL", "var(--warn)"]];
+  let headers = "";
+  for (const [key, label, color] of colDefs) {
+    headers += `<div class="c-col-label" style="left:${colX[key]}px;color:${color}">${label}</div>`;
+  }
+
+  const svg = $("#mapSvg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = edges + headers;
+  $("#mapNodes").innerHTML = html;
+}
+
+function matchGlob(pat, s) {
+  try {
+    const re = new RegExp("^" + String(pat).split("*").map((x) => x.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$");
+    return re.test(s);
+  } catch { return false; }
+}
+
+function startLiveTimer() {
+  if (liveTimer) return;
+  liveTimer = setInterval(loadActivity, 1500);
+}
+
+$("#livePause") && ($("#livePause").onchange = (e) => { live.paused = e.target.checked; });
+
+window.addEventListener("resize", () => { renderMap(); });
+
+function renderSettings() {
+  const e = state.endpoint || {};
+  $("#setRtk").checked = e.rtk !== false;
+  $("#setCaveman").value = String(e.caveman || 0);
+  $("#cavemanVal").textContent = String(e.caveman || 0);
+  $("#setPonytail").value = e.ponytail || "off";
+  $("#setLogs").checked = state.logsEnabled !== false;
+  $("#setApiKey").value = state.apiKey || "";
+}
+
+// tabs
+$$("#tabs .tab").forEach((t) => {
+  t.onclick = () => {
+    $$("#tabs .tab").forEach((x) => x.classList.remove("active"));
+    t.classList.add("active");
+    ["providers", "combos", "injections", "usage", "logs", "settings"].forEach((k) => {
+      $("#tab-" + k).style.display = k === t.dataset.tab ? "" : "none";
+    });
+    if (t.dataset.tab === "logs") loadLogs();
+    if (t.dataset.tab === "usage") { live.seen.clear(); $("#liveStream").innerHTML = '<div class="live-empty">waiting for requests…</div>'; loadActivity(); startLiveTimer(); }
+  };
+});
+
+// modal
+let editId = null;
+function openModal(p) {
+  editId = p ? p.id : null;
+  $("#modalTitle").textContent = p ? "Edit provider" : "Add provider";
+  $("#pName").value = p ? p.name : "";
+  $("#pAlias").value = p ? p.alias || "" : "";
+  $("#pKind").value = p ? p.kind : "openai";
+  $("#pTier").value = p ? p.tier : "cheap";
+  $("#pBaseUrl").value = p ? p.baseUrl : "";
+  $("#pApiKey").value = p && p.keys && p.keys.length ? p.keys.map((k) => k.label + "  " + k.preview + (k.enabled === false ? "  (disabled)" : "") + (k.lastError ? "  err: " + k.lastError : "")).join("\n") : "";
+  $("#pModels").value = p && p.models ? p.models.join(", ") : "";
+  $("#pAnthVer").value = p ? p.anthropicVersion || "2023-06-01" : "2023-06-01";
+  $("#testResult").textContent = "";
+  $("#modal").classList.add("open");
+}
+$("#btnAdd").onclick = () => openModal();
+$("#btnCancel").onclick = () => $("#modal").classList.remove("open");
+$("#modal").addEventListener("click", (e) => {
+  if (e.target.id === "modal") $("#modal").classList.remove("open");
+});
+
+$("#btnSave").onclick = async () => {
+  const rawKeys = $("#pApiKey").value.split("\n").map((s) => s.trim()).filter((s) => s && !s.includes("  ")); // ignore preview lines on edit
+  const body = {
+    name: $("#pName").value.trim(),
+    alias: $("#pAlias").value.trim(),
+    kind: $("#pKind").value,
+    tier: $("#pTier").value,
+    baseUrl: $("#pBaseUrl").value.trim(),
+    models: $("#pModels").value.split(",").map((s) => s.trim()).filter(Boolean),
+    anthropicVersion: $("#pAnthVer").value.trim() || "2023-06-01",
+  };
+  if (rawKeys.length) body.apiKeys = rawKeys; // only touch the key pool when new keys are given
+  if (!body.name) return toast("name required");
+  if (!body.baseUrl) return toast("baseUrl required");
+  try {
+    if (editId) {
+      await api("/api/providers/" + editId, { method: "POST", body });
+      toast("provider updated");
+    } else {
+      await api("/api/providers", { method: "POST", body });
+      toast("provider added");
+    }
+    $("#modal").classList.remove("open");
+    load();
+  } catch (e) {
+    toast("error: " + e.message);
+  }
+};
+
+$("#btnTest").onclick = async () => {
+  $("#testResult").textContent = "testing…";
+  try {
+    const r = await api("/api/providers/test", {
+      method: "POST",
+      body: { baseUrl: $("#pBaseUrl").value.trim(), apiKey: $("#pApiKey").value.trim() },
+    });
+    if (r.ok) {
+      $("#testResult").innerHTML = '<span style="color:var(--acc2)">✓ connected</span>' +
+        (r.models && r.models.length ? " — " + r.models.length + " models: " + esc(r.models.slice(0, 8).join(", ")) : "");
+      if (r.models && r.models.length && !$("#pModels").value.trim()) {
+        $("#pModels").value = r.models.slice(0, 40).join(", ");
+      }
+    } else {
+      $("#testResult").innerHTML = '<span style="color:var(--err)">✗ ' + esc(r.error || "failed") + "</span>";
+    }
+  } catch (e) {
+    $("#testResult").innerHTML = '<span style="color:var(--err)">✗ ' + esc(e.message) + "</span>";
+  }
+};
+
+$("#btnCombo").onclick = async () => {
+  const name = $("#comboName").value.trim();
+  const providers = $("#comboProviders").value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!name || !providers.length) return toast("name and providers required");
+  try {
+    await api("/api/combos", { method: "POST", body: { name, providers } });
+    $("#comboName").value = "";
+    $("#comboProviders").value = "";
+    toast("combo created");
+    load();
+  } catch (e) {
+    toast("error: " + e.message);
+  }
+};
+
+$("#btnSaveSettings").onclick = async () => {
+  try {
+    await api("/api/settings", {
+      method: "POST",
+      body: {
+        rtk: $("#setRtk").checked,
+        caveman: parseInt($("#setCaveman").value, 10),
+        ponytail: $("#setPonytail").value,
+        logsEnabled: $("#setLogs").checked,
+      },
+    });
+    toast("settings saved");
+    load();
+  } catch (e) {
+    toast("error: " + e.message);
+  }
+};
+$("#setCaveman").oninput = () => {
+  $("#cavemanVal").textContent = $("#setCaveman").value;
+};
+
+$("#btnRotate").onclick = async () => {
+  const v = $("#setApiKey").value.trim();
+  try {
+    await api("/api/settings", { method: "POST", body: { apiKey: v || undefined } });
+    toast("api key updated");
+    load();
+  } catch (e) {
+    toast("error: " + e.message);
+  }
+};
+
+$("#btnUsageReset").onclick = async () => {
+  if (!confirm("reset all usage statistics?")) return;
+  await api("/api/usage/reset", { method: "POST" });
+  toast("usage reset");
+  load();
+};
+
+$("#btnRefresh").onclick = () => {
+  load();
+  toast("refreshed");
+};
+
+// copy helpers
+document.addEventListener("click", (e) => {
+  const c = e.target.closest(".copy");
+  if (!c) return;
+  const el = document.getElementById(c.dataset.copy);
+  if (!el) return;
+  const text = el.textContent;
+  navigator.clipboard && navigator.clipboard.writeText(text);
+  toast("copied: " + text.slice(0, 30));
+});
+
+// logs
+async function loadLogs() {
+  try {
+    const r = await api("/api/logs");
+    $("#logCount").textContent = (r.logs || []).length;
+    if (!r.logs || !r.logs.length) {
+      $("#logList").innerHTML = '<div class="empty">no requests logged yet</div>';
+      return;
+    }
+    $("#logList").innerHTML = r.logs
+      .map((l) => {
+        const ok = l.ok !== false;
+        return `<div class="logrow">
+          <div class="row" style="justify-content:space-between">
+            <div><span style="color:${ok ? "var(--acc2)" : "var(--err)"}">${ok ? "●" : "●"}</span>
+              <code>${esc(l.model || "")}</code> → <b>${esc(l.provider || "")}</b>
+              ${l.stream ? '<span class="badge">stream</span>' : ""}</div>
+            <div style="color:var(--dim);font-size:12px">${new Date(l.ts).toLocaleTimeString()} · in ${fmt(l.tokensIn)}${l.tokensOut ? " / out " + fmt(l.tokensOut) : ""}</div>
+          </div>
+          ${l.error ? `<pre class="logline" style="color:var(--err);margin-top:4px">${esc(l.error)}</pre>` : ""}
+          ${l.attempts && l.attempts.length ? `<details style="margin-top:4px"><summary>attempts (${l.attempts.length})</summary><pre class="logline" style="margin-top:4px">${esc(JSON.stringify(l.attempts, null, 2))}</pre></details>` : ""}
+        </div>`;
+      })
+      .join("");
+  } catch (e) {
+    $("#logList").innerHTML = '<div class="empty">failed to load logs</div>';
+  }
+}
+
+// poll state
+load();
+setInterval(load, 8000);
+</script>
+</body>
+</html>

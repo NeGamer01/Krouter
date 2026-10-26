@@ -1,0 +1,31 @@
+{
+  "name": "krouter",
+  "version": "1.1.0",
+  "description": "Multi-provider LLM router and gateway. Single OpenAI-compatible endpoint, 3-tier fallback, format translation, quota tracking, token savers, CLI, Cloudflare tunnels. Zero dependencies.",
+  "main": "server.js",
+  "bin": {
+    "krouter": "./cli.js",
+    "krouter-server": "./server.js"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "cli": "node cli.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "llm",
+    "router",
+    "gateway",
+    "proxy",
+    "openai",
+    "anthropic",
+    "fallback",
+    "ai-gateway",
+    "llm-router",
+    "token-saver"
+  ],
+  "license": "MIT"
+}
