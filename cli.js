@@ -479,6 +479,7 @@ function spawnTunnel(bin, port, domain) {
     ? ['tunnel', '--no-autoupdate', 'run', '--url', 'http://127.0.0.1:' + port, domain]
     : ['tunnel', '--no-autoupdate', '--url', 'http://127.0.0.1:' + port];
   const logFile = path.join(KROUTER_HOME, 'tunnel.log');
+  try { fs.writeFileSync(logFile, ''); } catch { /* keep old log */ }
   const out2 = fs.openSync(logFile, 'a');
   const child = spawn(bin, args, { detached: true, stdio: ['ignore', out2, out2] });
   child.unref();
@@ -491,33 +492,76 @@ function parseQuickUrl(line) {
   return m ? m[0] : null;
 }
 
+// is this pid actually a cloudflared process? (pids get recycled — never trust
+// a bare pid number on long-running servers)
+function pidIsCloudflared(pid) {
+  if (!pid) return false;
+  try {
+    if (process.platform === 'win32') {
+      const r = execSync(`powershell -NoProfile -Command "(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).Path"`, { encoding: 'utf8' });
+      const p = r.trim().toLowerCase();
+      return p.includes('cloudflared');
+    }
+    const r = execSync(`cat /proc/${pid}/cmdline 2>/dev/null | tr '\\0' ' '`, { encoding: 'utf8' });
+    return /cloudflared/.test(r);
+  } catch { return false; }
+}
+
+// kill a tunnel process: TERM, wait, then KILL. returns true if it ended.
+function killTunnel(pid, label) {
+  let alive = false;
+  try { process.kill(pid, 'SIGTERM'); alive = true; } catch { /* already gone */ }
+  if (!alive) return true;
+  for (let i = 0; i < 12; i++) {
+    try { process.kill(pid, 0); } catch { return true; } // exited
+    setTimeout(0, 250);
+  }
+  // still alive after 3s — force kill
+  try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ }
+  try { process.kill(pid, 0); return false; } catch { return true; }
+}
+
+// find any cloudflared tunnel processes on this machine (belt & braces — even
+// ones we did not spawn, e.g. after a cli re-install or a crash)
+function findStrayTunnels() {
+  const found = [];
+  try {
+    if (process.platform === 'win32') {
+      const r = execSync('powershell -NoProfile -Command "Get-Process cloudflared -ErrorAction SilentlyContinue | Select-Object Id"', { encoding: 'utf8' });
+      for (const l of r.split('\n')) { const pid = parseInt(l.trim(), 10); if (pid > 0) found.push(pid); }
+    } else {
+      const r = execSync("pgrep -f 'cloudflared.*tunnel' 2>/dev/null || true", { encoding: 'utf8' });
+      for (const l of r.split('\n')) { const pid = parseInt(l.trim(), 10); if (pid > 0) found.push(pid); }
+    }
+  } catch { /* none */ }
+  return found;
+}
+
 async function cmdTunnelStart(flags) {
   const tcfg = loadCliConfig();
   let port;
   try { port = new URL(tcfg.url).port || '20128'; } catch { port = '20128'; }
   const bin = await ensureCloudflared();
   const domain = flags.domain || null;
-  let tunnels = loadTunnels();
 
-  // clean stale records: kill anything still alive, drop exited ones
-  const survivors = [];
+  // 1) kill recorded tunnels that are still actually cloudflared
+  const tunnels = loadTunnels();
   for (const t of tunnels.tunnels || []) {
-    let alive = false;
-    if (t.pid && !t.exited) {
-      try { process.kill(t.pid, 0); alive = true; } catch { alive = false; }
-    }
-    if (alive) {
-      try { process.kill(t.pid, 'SIGTERM'); } catch { /* gone */ }
-      warn('stopped leftover tunnel pid ' + t.pid);
+    if (t.pid && pidIsCloudflared(t.pid)) {
+      killTunnel(t.pid, 'recorded');
+      warn('stopped old tunnel pid ' + t.pid);
     }
   }
-  tunnels = { tunnels: [] }; // fresh record book
-  saveTunnels(tunnels);
+  // 2) kill any stray cloudflared not on record
+  for (const pid of findStrayTunnels()) {
+    if (pidIsCloudflared(pid)) { killTunnel(pid, 'stray'); warn('stopped stray tunnel pid ' + pid); }
+  }
+  // 3) fresh record book
+  saveTunnels({ tunnels: [] });
 
   const { pid, logFile } = spawnTunnel(bin, port, domain);
   ok('tunnel started (pid ' + pid + (domain ? ' domain ' + domain : ' quick') + ')  log: ' + logFile);
-  tunnels.tunnels.push({ pid, domain: domain || null, startedAt: Date.now(), exited: false });
-  saveTunnels(tunnels);
+  saveTunnels({ tunnels: [{ pid, domain: domain || null, startedAt: Date.now(), exited: false }] });
   // try to read quick url from log
   if (!domain) {
     out('waiting for public url…');
@@ -542,22 +586,12 @@ async function cmdTunnelStart(flags) {
 function cmdTunnelStop(flags) {
   const tunnels = loadTunnels();
   let stopped = 0;
-  const remaining = [];
   for (const t of tunnels.tunnels || []) {
-    if (t.pid && !t.exited) {
-      try { process.kill(t.pid, 'SIGTERM'); stopped++; } catch { /* already gone */ }
-    }
+    if (t.pid && pidIsCloudflared(t.pid) && killTunnel(t.pid, 'recorded')) stopped++;
   }
-  // wait up to 5s for processes to die, then drop all records
-  if (stopped) {
-    for (let i = 0; i < 20; i++) {
-      const still = (tunnels.tunnels || []).some((t) => {
-        if (!t.pid || t.exited) return false;
-        try { process.kill(t.pid, 0); return true; } catch { return false; }
-      });
-      if (!still) break;
-      setTimeout(0, 250);
-    }
+  // also sweep strays the record book lost (crash, re-install, edited json)
+  for (const pid of findStrayTunnels()) {
+    if (pidIsCloudflared(pid) && killTunnel(pid, 'stray')) { stopped++; warn('stopped stray tunnel pid ' + pid); }
   }
   saveTunnels({ tunnels: [] }); // clear the record book
   if (stopped) ok(stopped + ' tunnel(s) stopped');
@@ -568,14 +602,21 @@ function cmdTunnelStatus(flags) {
   const tunnels = loadTunnels();
   const bin = cloudflaredPath();
   out('cloudflared: ' + (bin ? 'installed (' + bin + ')' : 'not installed'));
-  let any = false;
+  let shown = 0;
   for (const t of tunnels.tunnels || []) {
-    const alive = t.pid && !t.exited && (() => { try { process.kill(t.pid, 0); return true; } catch { return false; } })();
-    if (!t.exited) any = true;
+    const alive = !!(t.pid && pidIsCloudflared(t.pid));
+    shown++;
     out('  pid ' + t.pid + '  ' + (alive ? 'RUNNING' : 'stopped') + '  ' +
-      (t.url || t.domain || (t.domain ? '' : 'quick')) + '  started ' + new Date(t.startedAt).toLocaleString());
+      (t.url || t.domain || 'quick') + '  started ' + new Date(t.startedAt || Date.now()).toLocaleString());
   }
-  if (!any) out('no tunnels on record');
+  const strays = findStrayTunnels().filter((pid) => pidIsCloudflared(pid));
+  for (const pid of strays) {
+    if (!(tunnels.tunnels || []).some((t) => t.pid === pid)) {
+      shown++;
+      out('  pid ' + pid + '  RUNNING (unmanaged stray — krouter tunnel stop will reap it)');
+    }
+  }
+  if (!shown) out('no tunnels on record');
 }
 
 // ─── main ──────────────────────────────────────────────────────────────
