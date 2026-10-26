@@ -448,10 +448,27 @@ function timeAgo(ts) {
   return new Date(ts).toLocaleDateString();
 }
 
+// remote (non-localhost) sessions authenticate the dashboard with the router key
+// via ?key=… in the url (stored in a cookie afterwards) — localhost needs nothing.
+function dashKey() {
+  try {
+    const m = /(?:^|[?&])key=([^&]+)/.exec(location.search);
+    if (m) { document.cookie = 'krouter_key=' + encodeURIComponent(decodeURIComponent(m[1])) + ';path=/;max-age=2592000;SameSite=Lax'; return decodeURIComponent(m[1]); }
+  } catch { /* not in a browser */ }
+  try {
+    const c = /(?:^|;\s*)krouter_key=([^;]+)/.exec(document.cookie);
+    if (c) return decodeURIComponent(c[1]);
+  } catch { /* no cookies */ }
+  return '';
+}
+const DASH_KEY = dashKey();
+
 async function api(path, opts = {}) {
+  const headers = { "Content-Type": "application/json" };
+  if (DASH_KEY) headers["Authorization"] = "Bearer " + DASH_KEY;
   const r = await fetch(path, {
     method: opts.method || "GET",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
   if (!r.ok) throw new Error((await r.json().catch(() => ({})).error || {}).message || r.status);

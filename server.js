@@ -1351,11 +1351,19 @@ async function callProviderStream({ provider, model, body }, clientRes) {
 }
 
 // ─── auth ──────────────────────────────────────────────────────────────────
-function authorized(req) {
+function authorized(req, urlObj) {
+  // router key via header (bearer/x-api-key) or ?key= query param / cookie
   const auth = req.headers['x-api-key'] || req.headers.authorization;
-  if (!auth) return false;
-  const token = String(auth).replace(/^Bearer\s+/i, '').trim();
-  return token === config.apiKey;
+  let token = auth ? String(auth).replace(/^Bearer\s+/i, '').trim() : '';
+  if (!token && urlObj && urlObj.searchParams) {
+    const q = urlObj.searchParams.get('key');
+    if (q) token = q;
+  }
+  if (!token && req.headers.cookie) {
+    const m = /(?:^|;\s*)krouter_key=([^;]+)/.exec(req.headers.cookie);
+    if (m) token = m[1];
+  }
+  return token && token === config.apiKey;
 }
 
 // ─── api router ────────────────────────────────────────────────────────────
@@ -1591,11 +1599,11 @@ function refreshQuotaTick(pid) {
 }
 
 // ─── dashboard api ─────────────────────────────────────────────────────────
-async function handleDashboardApi(req, res, pathname) {
-  // dashboard api uses the same api key (bearer) OR is open on localhost
+async function handleDashboardApi(req, res, pathname, urlObj) {
+  // dashboard api uses the same api key (bearer / x-api-key / ?key= / cookie) OR is open on localhost
   const isLocal =
     req.socket.remoteAddress === '127.0.0.1' || req.socket.remoteAddress === '::1' || req.socket.remoteAddress === '::ffff:127.0.0.1';
-  if (!isLocal && !authorized(req)) {
+  if (!isLocal && !authorized(req, urlObj)) {
     return json(res, 401, { error: 'unauthorized' });
   }
 
@@ -1992,9 +2000,9 @@ const server = http.createServer(async (req, res) => {
       return serveDashboard(req, res);
     }
 
-    if (pathname.startsWith('/api/')) {
-      return await handleDashboardApi(req, res, pathname);
-    }
+if (pathname.startsWith('/api/')) {
+    return await handleDashboardApi(req, res, pathname, u);
+  }
 
     if (pathname.startsWith('/v1/')) {
       return await handleV1(req, res, pathname);
