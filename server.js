@@ -1911,7 +1911,63 @@ async function handleDashboardApi(req, res, pathname, urlObj) {
     }
   }
 
+  // ── model status: last-known health per model (in-memory, optional persist) ─
+  // POST /api/models/check { providerId, model? } — light probe: one tiny
+  // chat request per model (or /models list when chat fails for invalid-model).
+  if (req.method === 'POST' && pathname === '/api/models/check') {
+    const body = parseJsonBody(await readBody(req)) || {};
+    const pid = body.providerId;
+    const onlyModel = body.model || null;
+    const p = getProvider(pid);
+    if (!p) return json(res, 400, { error: 'provider not found' });
+    const list = onlyModel ? [onlyModel] : (p.models || []).slice(0, 30);
+    const results = [];
+    for (const model of list) {
+      const t0 = Date.now();
+      try {
+        const r = await callProviderNonStream({
+          provider: p,
+          model,
+          body: { model, messages: [{ role: 'user', content: '1' }], max_tokens: 1, stream: false },
+        });
+        const ok = r && (r.status === 200 || (r.openai && r.openai.choices));
+        results.push({ provider: pid, model, status: ok ? 'up' : 'down', ms: Date.now() - t0, error: ok ? null : 'no response' });
+      } catch (e) {
+        const msg = String(e.message || '').slice(0, 140);
+        // no usable keys / auth exhausted → model is down for this router
+        const hardDown = /no usable keys|401|403|invalid api key|revoked/i.test(msg);
+        // transient infra errors → degraded, probably fine soon
+        const degraded = /timeout|5\d\d|429|rate|quota|throttl|overload|capacity|econn/i.test(msg);
+        const status = hardDown ? 'down' : degraded ? 'degraded' : /invalid|not found|no such|does not exist|404|400/i.test(msg) ? 'down' : 'degraded';
+        results.push({ provider: pid, model, status, ms: Date.now() - t0, error: msg });
+      }
+    }
+    // merge into in-memory status map
+    for (const r of results) modelStatusSet(r);
+    return json(res, 200, { results });
+  }
+
+  if (req.method === 'GET' && pathname === '/api/models/status') {
+    return json(res, 200, { statuses: modelStatuses() });
+  }
+
   return json(res, 404, { error: 'not found' });
+}
+
+// in-memory model health (lost on restart — that's fine, re-check is one click)
+const MODEL_STATUS_TTL = 10 * 60_000; // 10 min
+const _modelStatus = new Map();
+function modelStatusSet(r) {
+  _modelStatus.set(r.provider + '|' + r.model, { ...r, ts: Date.now() });
+}
+function modelStatuses() {
+  const t = Date.now();
+  const out = [];
+  for (const [k, v] of _modelStatus.entries()) {
+    if (t - (v.ts || 0) > MODEL_STATUS_TTL) continue;
+    out.push(v);
+  }
+  return out;
 }
 
 function parseJsonBody(buf) {
