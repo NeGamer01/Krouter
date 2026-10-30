@@ -571,6 +571,7 @@ function render() {
   renderProviders();
   renderCombos();
   renderInjections();
+  renderModels();
   renderUsage();
   renderSettings();
 }
@@ -1174,6 +1175,7 @@ async function loadModelStatuses() {
     const r = await api("/api/models/status");
     modelState.statuses = r.statuses || [];
   } catch { /* not yet authenticated or fresh server */ }
+  renderModels();
 }
 
 function statusOf(pid, model) {
