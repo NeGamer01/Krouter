@@ -448,31 +448,65 @@ function timeAgo(ts) {
   return new Date(ts).toLocaleDateString();
 }
 
-// remote (non-localhost) sessions authenticate the dashboard with the router key
-// via ?key=… in the url (stored in a cookie afterwards) — localhost needs nothing.
-function dashKey() {
-  try {
-    const m = /(?:^|[?&])key=([^&]+)/.exec(location.search);
-    if (m) { document.cookie = 'krouter_key=' + encodeURIComponent(decodeURIComponent(m[1])) + ';path=/;max-age=2592000;SameSite=Lax'; return decodeURIComponent(m[1]); }
-  } catch { /* not in a browser */ }
-  try {
-    const c = /(?:^|;\s*)krouter_key=([^;]+)/.exec(document.cookie);
-    if (c) return decodeURIComponent(c[1]);
-  } catch { /* no cookies */ }
-  return '';
-}
-const DASH_KEY = dashKey();
+// remote (non-localhost) dashboard sessions authenticate with a login form:
+// POST /api/login { key: <router api key> } → server sets a signed session
+// cookie (krouter_sess, 30 days). subsequent /api/* calls use that cookie.
+// localhost needs no auth at all.
 
 async function api(path, opts = {}) {
-  const headers = { "Content-Type": "application/json" };
-  if (DASH_KEY) headers["Authorization"] = "Bearer " + DASH_KEY;
   const r = await fetch(path, {
     method: opts.method || "GET",
-    headers,
+    headers: { "Content-Type": "application/json" },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
+  if (r.status === 401) { showLogin(); throw new Error('unauthorized'); }
   if (!r.ok) throw new Error((await r.json().catch(() => ({})).error || {}).message || r.status);
   return r.json();
+}
+
+// login overlay
+function showLogin() {
+  if (document.getElementById('loginOv')) return;
+  const ov = document.createElement('div');
+  ov.id = 'loginOv';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);display:grid;place-items:center;z-index:100;backdrop-filter:blur(3px)';
+  ov.innerHTML = `<div style="width:min(400px,92vw);background:var(--bg2);border:1px solid var(--line2);border-radius:16px;padding:28px 26px;box-shadow:0 24px 60px rgba(0,0,0,.5)">
+    <div style="text-align:center;margin-bottom:18px">
+      <div style="width:44px;height:44px;margin:0 auto 10px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;font-weight:800;font-size:18px">kr</div>
+      <h2 style="margin:0;font-size:17px">krouter login</h2>
+      <p style="margin:4px 0 0;color:var(--dim);font-size:12px">masukkan router api key untuk membuka dashboard</p>
+    </div>
+    <input id="loginKey" type="password" placeholder="kr-…" style="text-align:center;font-size:14px;padding:10px" autofocus>
+    <div id="loginErr" style="color:var(--err);font-size:12px;min-height:16px;margin-top:6px;text-align:center"></div>
+    <button id="loginBtn" style="width:100%;margin-top:8px;padding:10px">Login</button>
+  </div>`;
+  document.body.appendChild(ov);
+  const inp = ov.querySelector('#loginKey');
+  const btn = ov.querySelector('#loginBtn');
+  const errEl = ov.querySelector('#loginErr');
+  const submit = async () => {
+    const key = inp.value.trim();
+    if (!key) { errEl.textContent = 'key masih kosong'; return; }
+    btn.disabled = true; btn.textContent = 'checking…';
+    try {
+      const r = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.status === 200) { ov.remove(); load(); return; }
+      errEl.textContent = (j && j.error) || 'wrong key';
+      btn.disabled = false; btn.textContent = 'Login';
+      inp.focus(); inp.select();
+    } catch (e) {
+      errEl.textContent = 'network error: ' + (e.message || '');
+      btn.disabled = false; btn.textContent = 'Login';
+    }
+  };
+  btn.onclick = submit;
+  inp.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+  inp.focus();
 }
 
 async function load() {

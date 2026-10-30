@@ -1600,10 +1600,11 @@ function refreshQuotaTick(pid) {
 
 // ─── dashboard api ─────────────────────────────────────────────────────────
 async function handleDashboardApi(req, res, pathname, urlObj) {
-  // dashboard api uses the same api key (bearer / x-api-key / ?key= / cookie) OR is open on localhost
+  // dashboard api auth order: localhost (open) → session cookie → router key (header/?key=)
   const isLocal =
     req.socket.remoteAddress === '127.0.0.1' || req.socket.remoteAddress === '::1' || req.socket.remoteAddress === '::ffff:127.0.0.1';
-  if (!isLocal && !authorized(req, urlObj)) {
+  const hasSession = !!parseSession(req.headers.cookie);
+  if (!isLocal && !hasSession && !authorized(req, urlObj)) {
     return json(res, 401, { error: 'unauthorized' });
   }
 
@@ -1978,6 +1979,61 @@ function serveDashboard(req, res) {
   res.end(html);
 }
 
+// ─── dashboard session login ───────────────────────────────────────────────
+// remote (non-localhost) dashboard sessions log in with the router api key.
+// a signed session cookie (krouter_sess) then authenticates /api/* calls.
+const SESSION_MAX_AGE = 30 * 24 * 3600; // 30 days
+function sessionToken() {
+  return crypto.randomBytes(24).toString('hex') + '.' + (Math.floor(Date.now() / 1000) + SESSION_MAX_AGE);
+}
+function signSession(token) {
+  return crypto.createHmac('sha256', String(config.apiKey)).update(token).digest('hex');
+}
+function parseSession(cookie) {
+  if (!cookie) return null;
+  const m = /(?:^|;\s*)krouter_sess=([^;]+)/.exec(cookie);
+  if (!m) return null;
+  const parts = decodeURIComponent(m[1]).split(':');
+  if (parts.length !== 2) return null;
+  const [token, sig] = parts;
+  if (signSession(token) !== sig) return null;
+  const exp = parseInt(String(token).split('.').pop() || '0', 10);
+  if (!exp || exp < Math.floor(Date.now() / 1000)) return null;
+  return token;
+}
+function sessionCookie(token) {
+  return 'krouter_sess=' + encodeURIComponent(token + ':' + signSession(token)) + ';path=/;max-age=' + SESSION_MAX_AGE + ';SameSite=Lax;HttpOnly';
+}
+
+async function handleLogin(req, res, pathname) {
+  // POST /api/login { key } — validates against the router api key
+  if (req.method === 'POST' && pathname === '/api/login') {
+    const body = parseJsonBody(await readBody(req));
+    const key = body && body.key ? String(body.key).trim() : '';
+    if (!key) return json(res, 400, { error: 'key required' });
+    if (key !== config.apiKey) return json(res, 401, { error: 'wrong key' });
+    const token = sessionToken();
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Set-Cookie': sessionCookie(token),
+      'Cache-Control': 'no-cache',
+    });
+    res.end(JSON.stringify({ ok: true }));
+    return true;
+  }
+  // POST /api/logout — clear session cookie
+  if (req.method === 'POST' && pathname === '/api/logout') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Set-Cookie': 'krouter_sess=;path=/;max-age=0;SameSite=Lax;HttpOnly',
+      'Cache-Control': 'no-cache',
+    });
+    res.end(JSON.stringify({ ok: true }));
+    return true;
+  }
+  return false;
+}
+
 // ─── main server ───────────────────────────────────────────────────────────
 const VERSION = '1.0.0';
 
@@ -1998,6 +2054,11 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/' || pathname === '/dashboard' || pathname === '/dashboard.html') {
       return serveDashboard(req, res);
+    }
+
+    if (pathname === '/api/login' || pathname === '/api/logout') {
+      const handled = await handleLogin(req, res, pathname);
+      if (handled) return;
     }
 
 if (pathname.startsWith('/api/')) {
